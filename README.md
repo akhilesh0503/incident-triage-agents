@@ -1,6 +1,6 @@
 # Autonomous Incident Triage System
 
-**5/5 scenarios · 100 tests passing in 4s · HIGH confidence diagnosis on all runs · parallel specialist agents in <1s · 0 routing mismatches across 5 alert types**
+**5/5 scenarios · 101 tests passing in 3.2s · HIGH confidence diagnosis on all runs · parallel specialist agents in <1s · 0 routing mismatches across 5 alert types**
 
 A production-grade multi-agent system that classifies production alerts with an LLM, routes to specialist agents in parallel via the A2A protocol, and synthesizes a grounded root cause diagnosis with a 4-step remediation plan — streamed live to the UI.
 
@@ -121,17 +121,18 @@ python run_traffic.py
 cd orchestrator
 pip install pytest pytest-asyncio
 pytest ../tests/ -v
+# 101 passed in 3.16s
 ```
 
-| File | What it covers |
-|---|---|
-| `test_shared_models.py` | A2A protocol — JSONRPCRequest, Task lifecycle, Artifact, TaskState transitions |
-| `test_log_analyzer.py` | All 10 regex patterns, multi-match, edge cases, anomaly flag |
-| `test_metrics_analyzer.py` | All 5 metric thresholds, baseline comparison, severity ordering |
-| `test_deployment_analyzer.py` | Correlation scoring — failed=95, success=70, no deploys=0 |
-| `test_diagnosis_prompts.py` | Prompt builder output — metric values, log samples, version numbers, section headers |
-| `test_ollama_parser.py` | Response parser — ROOT CAUSE extraction, confidence levels, remediation steps, malformed fallback |
-| `test_graph_routing.py` | Full ALERT_ROUTING table, conditional edge logic, LangGraph node structure |
+| File | Tests | What it covers |
+|---|---|---|
+| `test_shared_models.py` | 14 | A2A protocol — JSONRPCRequest, Task lifecycle, Artifact, TaskState transitions |
+| `test_log_analyzer.py` | 13 | Real kernel OOM messages, asyncpg/gRPC/pgbouncer/nginx error formats, multi-pattern matching |
+| `test_metrics_analyzer.py` | 16 | Realistic float values (87.4%, 1847ms), threshold boundaries, baseline delta flagging |
+| `test_deployment_analyzer.py` | 7 | Correlation scoring with real CI/CD metadata, ArgoCD rollbacks, commit SHAs |
+| `test_diagnosis_prompts.py` | 13 | Prompt builder output — metric values, log samples, version numbers, section headers |
+| `test_ollama_parser.py` | 11 | Actual qwen2.5:3b output patterns — preamble text, truncated responses, trailing Note sections, label-format edge case |
+| `test_graph_routing.py` | 14 | Full ALERT_ROUTING table, conditional edge logic, LangGraph node structure |
 
 ---
 

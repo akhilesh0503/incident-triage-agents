@@ -72,9 +72,9 @@ class AgentCard(BaseModel):
 
 class JSONRPCRequest(BaseModel):
     jsonrpc: str = "2.0"
-    id: str
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     method: str
-    params: dict[str, Any] = Field(default_factory=dict)
+    params: Optional[dict[str, Any]] = Field(default_factory=dict)
 
 
 class JSONRPCError(BaseModel):

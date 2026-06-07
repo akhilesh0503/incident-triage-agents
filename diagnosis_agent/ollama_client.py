@@ -10,7 +10,7 @@ import httpx
 _OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 _OLLAMA_MODEL    = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")
 
-_ROOT_CAUSE_RE       = re.compile(r"ROOT CAUSE:\s*(.+?)(?=\nCONFIDENCE:|\Z)", re.DOTALL)
+_ROOT_CAUSE_RE       = re.compile(r"ROOT CAUSE:\s*(?:The root cause is\s*)?(.+?)(?=\nCONFIDENCE:|\Z)", re.DOTALL)
 _CONFIDENCE_RE       = re.compile(r"CONFIDENCE:\s*(HIGH|MEDIUM|LOW)")
 _REMEDIATION_RE      = re.compile(r"REMEDIATION STEPS:\s*(.+)", re.DOTALL)
 _REMEDIATION_ITEM_RE = re.compile(r"^\d+\.\s+(.+)", re.MULTILINE)
@@ -21,7 +21,7 @@ async def call_ollama(prompt: str, timeout: float = 120.0) -> dict[str, Any]:
         "model": _OLLAMA_MODEL,
         "prompt": prompt,
         "stream": False,
-        "options": {"temperature": 0.2, "num_predict": 512},
+        "options": {"temperature": 0.2, "num_predict": 768},
     }
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(f"{_OLLAMA_BASE_URL}/api/generate", json=payload)

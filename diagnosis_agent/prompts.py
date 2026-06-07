@@ -60,19 +60,24 @@ def build_diagnosis_prompt(
 
     return f"""{evidence_block}
 
-You are an SRE. Based on the evidence above, write a diagnosis for this incident.
-
-Use this exact format. Fill in every section with specific details from the evidence.
+You are an SRE diagnosing a production incident for {service}.
+Write your diagnosis below. Every answer must be a complete sentence — no blank answers.
 
 ROOT CAUSE:
-Write 1-2 sentences. Name the specific service, the failure type, and what caused it.
+The root cause is
 
 CONFIDENCE: HIGH
 
 REMEDIATION STEPS:
-1. Immediate: write the first thing the on-call engineer should do right now.
-2. Short-term: write what to fix within the next hour.
-3. Verify: write how to confirm the fix worked (mention a specific metric or log).
-4. Prevent: write one change to prevent this from happening again.
+1.
+2.
+3.
+4.
 
-Be specific. Use the service name "{service}" and any metrics or versions from the evidence above."""
+Rules:
+- ROOT CAUSE must name {service}, the failure mode, and what caused it.
+- Step 1 must be an action to take right now (restart, rollback, scale, etc).
+- Step 2 must fix the underlying cause within the hour.
+- Step 3 must name a specific metric or log to confirm recovery.
+- Step 4 must prevent recurrence (alerting threshold, config change, code fix).
+- Do NOT repeat these rules in your answer. Just write the diagnosis."""

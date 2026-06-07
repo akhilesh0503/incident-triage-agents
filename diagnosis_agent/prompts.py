@@ -60,19 +60,19 @@ def build_diagnosis_prompt(
 
     return f"""{evidence_block}
 
-Based on the evidence above, provide a structured incident diagnosis.
+You are an SRE. Based on the evidence above, write a diagnosis for this incident.
 
-Respond in this exact format (do not add extra sections):
+Use this exact format. Fill in every section with specific details from the evidence.
 
 ROOT CAUSE:
-<one or two sentences identifying the specific technical root cause>
+Write 1-2 sentences. Name the specific service, the failure type, and what caused it.
 
-CONFIDENCE: <HIGH|MEDIUM|LOW>
+CONFIDENCE: HIGH
 
 REMEDIATION STEPS:
-1. <immediate action — what to do right now>
-2. <short-term fix — within the hour>
-3. <verification step — how to confirm the fix worked>
-4. <preventive measure — to stop recurrence>
+1. Immediate: write the first thing the on-call engineer should do right now.
+2. Short-term: write what to fix within the next hour.
+3. Verify: write how to confirm the fix worked (mention a specific metric or log).
+4. Prevent: write one change to prevent this from happening again.
 
-Do not repeat the evidence. Be specific about the service name and the exact metrics cited."""
+Be specific. Use the service name "{service}" and any metrics or versions from the evidence above."""

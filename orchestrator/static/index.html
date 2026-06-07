@@ -303,11 +303,20 @@
 
 <script>
 const SCENARIOS = [
-  { name: "memory_leak",       icon: "🧠", label: "Memory Leak",     desc: "user-service OOM killer triggered" },
-  { name: "failed_deployment", icon: "🚨", label: "Failed Deploy",   desc: "payment-service 500s after v3.1.0" },
-  { name: "high_latency",      icon: "⏱️", label: "High Latency",    desc: "api-gateway p95 spike to 1.8s" },
-  { name: "database_overload", icon: "🗄️", label: "DB Overload",     desc: "db-proxy connection pool at 95%" },
-  { name: "cpu_spike",         icon: "🔥", label: "CPU Spike",       desc: "auth-service at 93% CPU" },
+  { name: "memory_leak",         icon: "🧠",  label: "Memory Leak",       desc: "user-service OOM killer triggered" },
+  { name: "failed_deployment",   icon: "🚨",  label: "Failed Deploy",     desc: "payment-service 500s after v3.1.0" },
+  { name: "high_latency",        icon: "⏱️",  label: "High Latency",      desc: "api-gateway p95 spike to 1.8s" },
+  { name: "database_overload",   icon: "🗄️",  label: "DB Overload",       desc: "db-proxy connection pool at 95%" },
+  { name: "cpu_spike",           icon: "🔥",  label: "CPU Spike",         desc: "auth-service at 93% CPU" },
+  { name: "disk_full",           icon: "💾",  label: "Disk Full",         desc: "order-service disk at 97%, writes failing" },
+  { name: "cert_expiry",         icon: "🔐",  label: "Cert Expiry",       desc: "api-gateway TLS cert expired" },
+  { name: "service_crash",       icon: "💥",  label: "Service Crash",     desc: "checkout-service CrashLoopBackOff" },
+  { name: "db_deadlock",         icon: "🔒",  label: "DB Deadlock",       desc: "transaction-service 45 deadlocks/min" },
+  { name: "rollback_incident",   icon: "↩️",  label: "Rollback",          desc: "inventory-service v2.8.0 rolled back" },
+  { name: "traffic_spike",       icon: "📈",  label: "Traffic Spike",     desc: "recommendation-service CPU+latency" },
+  { name: "connection_storm",    icon: "🌩️",  label: "Conn Storm",        desc: "notification-service 200 conn failures" },
+  { name: "gradual_degradation", icon: "🐌",  label: "Gradual Leak",      desc: "cache-service memory 78% over 6h" },
+  { name: "null_pointer_storm",  icon: "⚠️",  label: "NPE Storm",         desc: "product-service 89 NullPointerExceptions" },
 ];
 
 let activeScenario = null;

@@ -26,8 +26,8 @@ POSTGRES_DSN = os.environ["POSTGRES_DSN"]
 REDIS_URL    = os.environ.get("REDIS_URL", "redis://localhost:6379")
 PORT         = int(os.environ.get("DIAGNOSIS_AGENT_PORT", "8004"))
 
-TASKS_TOTAL   = Counter("a2a_tasks_total",             "Tasks processed", ["agent", "status"])
-TASK_DURATION = Histogram("a2a_task_duration_seconds", "Task duration",   ["agent"])
+TASKS_TOTAL   = Counter("diagnosis_agent_tasks_total",          "Tasks processed by DiagnosisAgent", ["status"])
+TASK_DURATION = Histogram("diagnosis_agent_task_duration_seconds", "DiagnosisAgent task duration")
 
 _task_store: TaskStore
 _pool: asyncpg.Pool
@@ -84,7 +84,7 @@ async def _write_incident(
 
 
 async def _process(task_id: str, payload: dict[str, Any]) -> None:
-    with TASK_DURATION.labels(agent="diagnosis_agent").time():
+    with TASK_DURATION.time():
         try:
             await _task_store.update_status(task_id, TaskState.WORKING, "Building diagnosis prompt...")
 
@@ -142,7 +142,7 @@ async def _process(task_id: str, payload: dict[str, Any]) -> None:
             }
 
             await _task_store.complete_task(task_id, result)
-            TASKS_TOTAL.labels(agent="diagnosis_agent", status="completed").inc()
+            TASKS_TOTAL.labels(status="completed").inc()
             log.info(
                 "diagnosis_complete",
                 task_id=task_id,
@@ -154,7 +154,7 @@ async def _process(task_id: str, payload: dict[str, Any]) -> None:
         except Exception as exc:
             log.exception("diagnosis_failed", task_id=task_id, error=str(exc))
             await _task_store.fail_task(task_id, str(exc))
-            TASKS_TOTAL.labels(agent="diagnosis_agent", status="failed").inc()
+            TASKS_TOTAL.labels(status="failed").inc()
 
 
 @get("/.well-known/agent-card.json")

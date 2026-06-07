@@ -25,8 +25,8 @@ POSTGRES_DSN = os.environ["POSTGRES_DSN"]
 REDIS_URL    = os.environ.get("REDIS_URL", "redis://localhost:6379")
 PORT         = int(os.environ.get("LOG_AGENT_PORT", "8001"))
 
-TASKS_TOTAL   = Counter("a2a_tasks_total",          "Tasks processed", ["agent", "status"])
-TASK_DURATION = Histogram("a2a_task_duration_seconds", "Task duration", ["agent"])
+TASKS_TOTAL   = Counter("log_agent_tasks_total",          "Tasks processed by LogAgent", ["status"])
+TASK_DURATION = Histogram("log_agent_task_duration_seconds", "LogAgent task duration")
 
 _task_store: TaskStore
 _pool: asyncpg.Pool
@@ -50,18 +50,18 @@ AGENT_CARD = AgentCard(
 
 
 async def _process(task_id: str, service: str, window_minutes: int) -> None:
-    with TASK_DURATION.labels(agent="log_agent").time():
+    with TASK_DURATION.time():
         try:
             await _task_store.update_status(task_id, TaskState.WORKING, "Querying logs...")
             async with _pool.acquire() as conn:
                 result = await analyze_logs(conn, service, window_minutes)
             await _task_store.complete_task(task_id, result)
-            TASKS_TOTAL.labels(agent="log_agent", status="completed").inc()
+            TASKS_TOTAL.labels(status="completed").inc()
             log.info("log_analysis_done", task_id=task_id, service=service, anomalous=result["anomalous"])
         except Exception as exc:
             log.exception("log_analysis_failed", task_id=task_id, error=str(exc))
             await _task_store.fail_task(task_id, str(exc))
-            TASKS_TOTAL.labels(agent="log_agent", status="failed").inc()
+            TASKS_TOTAL.labels(status="failed").inc()
 
 
 @get("/.well-known/agent-card.json")

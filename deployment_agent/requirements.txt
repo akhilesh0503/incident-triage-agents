@@ -1,4 +1,4 @@
-litestar[standard]==2.12.1
+litestar[standard]==2.23.0
 asyncpg==0.29.0
 redis==5.0.8
 structlog==24.4.0

@@ -1,0 +1,29 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "orchestrator"
+    static_configs:
+      - targets: ["orchestrator:8000"]
+    metrics_path: /metrics
+
+  - job_name: "log-agent"
+    static_configs:
+      - targets: ["log-agent:8001"]
+    metrics_path: /metrics
+
+  - job_name: "metrics-agent"
+    static_configs:
+      - targets: ["metrics-agent:8002"]
+    metrics_path: /metrics
+
+  - job_name: "deployment-agent"
+    static_configs:
+      - targets: ["deployment-agent:8003"]
+    metrics_path: /metrics
+
+  - job_name: "diagnosis-agent"
+    static_configs:
+      - targets: ["diagnosis-agent:8004"]
+    metrics_path: /metrics

@@ -1,0 +1,151 @@
+{
+  "title": "Incident Triage System",
+  "uid": "incident-triage",
+  "version": 1,
+  "schemaVersion": 38,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "tags": ["a2a", "incident-triage"],
+  "panels": [
+
+    {
+      "id": 1,
+      "title": "Triage Pipelines — Total",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "blue", "value": null }] }, "unit": "short" }
+      },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "sum(orchestrator_triage_total)",
+        "legendFormat": "Total"
+      }]
+    },
+
+    {
+      "id": 2,
+      "title": "Triage Success Rate",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "text": {} },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "unit": "percentunit",
+          "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "green", "value": 0.95 }] }
+        }
+      },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "sum(orchestrator_triage_total{status='completed'}) / sum(orchestrator_triage_total)",
+        "legendFormat": "Success Rate"
+      }]
+    },
+
+    {
+      "id": 3,
+      "title": "Avg Triage Duration (seconds)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "unit": "s",
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 15 }, { "color": "red", "value": 30 }] }
+        }
+      },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "rate(orchestrator_triage_duration_seconds_sum[5m]) / rate(orchestrator_triage_duration_seconds_count[5m])",
+        "legendFormat": "Avg Duration"
+      }]
+    },
+
+    {
+      "id": 4,
+      "title": "Agent Tasks Completed",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "orientation": "horizontal" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "unit": "short",
+          "thresholds": { "steps": [{ "color": "green", "value": null }] }
+        }
+      },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "log_agent_tasks_total{status='completed'}",        "legendFormat": "LogAgent" },
+        { "datasource": "Prometheus", "expr": "metrics_agent_tasks_total{status='completed'}",     "legendFormat": "MetricsAgent" },
+        { "datasource": "Prometheus", "expr": "deployment_agent_tasks_total{status='completed'}", "legendFormat": "DeploymentAgent" },
+        { "datasource": "Prometheus", "expr": "diagnosis_agent_tasks_total{status='completed'}",  "legendFormat": "DiagnosisAgent" }
+      ]
+    },
+
+    {
+      "id": 5,
+      "title": "Triage Pipelines Over Time",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 10 }, "unit": "short" }
+      },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "rate(orchestrator_triage_total{status='completed'}[2m])*60", "legendFormat": "Completed/min" },
+        { "datasource": "Prometheus", "expr": "rate(orchestrator_triage_total{status='failed'}[2m])*60",    "legendFormat": "Failed/min" }
+      ]
+    },
+
+    {
+      "id": 6,
+      "title": "Agent Task Duration — P95 (seconds)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2 }, "unit": "s" }
+      },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.95, rate(log_agent_task_duration_seconds_bucket[5m]))",        "legendFormat": "LogAgent p95" },
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.95, rate(metrics_agent_task_duration_seconds_bucket[5m]))",     "legendFormat": "MetricsAgent p95" },
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.95, rate(deployment_agent_task_duration_seconds_bucket[5m]))", "legendFormat": "DeploymentAgent p95" },
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.95, rate(diagnosis_agent_task_duration_seconds_bucket[5m]))",  "legendFormat": "DiagnosisAgent p95" }
+      ]
+    },
+
+    {
+      "id": 7,
+      "title": "Agent Error Rate",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 7 },
+      "options": { "tooltip": { "mode": "multi" } },
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 5 }, "unit": "short",
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "rate(log_agent_tasks_total{status='failed'}[2m])",        "legendFormat": "LogAgent errors" },
+        { "datasource": "Prometheus", "expr": "rate(metrics_agent_tasks_total{status='failed'}[2m])",     "legendFormat": "MetricsAgent errors" },
+        { "datasource": "Prometheus", "expr": "rate(deployment_agent_tasks_total{status='failed'}[2m])", "legendFormat": "DeploymentAgent errors" },
+        { "datasource": "Prometheus", "expr": "rate(diagnosis_agent_tasks_total{status='failed'}[2m])",  "legendFormat": "DiagnosisAgent errors" }
+      ]
+    },
+
+    {
+      "id": 8,
+      "title": "Triage Duration Distribution",
+      "type": "histogram",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 7 },
+      "options": { "bucketSize": "auto", "fillOpacity": 60 },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "color": { "mode": "fixed", "fixedColor": "blue" } }
+      },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "sum(rate(orchestrator_triage_duration_seconds_bucket[10m])) by (le)",
+        "legendFormat": "{{le}}"
+      }]
+    }
+
+  ]
+}

@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  - name: "triage-dashboards"
+    orgId: 1
+    folder: "Incident Triage"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

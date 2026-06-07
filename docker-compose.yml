@@ -1,0 +1,168 @@
+networks:
+  triage-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  grafana_data:
+
+services:
+
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    networks: [triage-net]
+    ports: ["5433:5432"]
+    environment:
+      POSTGRES_USER:     agent
+      POSTGRES_PASSWORD: agent_pass
+      POSTGRES_DB:       triage_db
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d triage_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    networks: [triage-net]
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Specialist Agents ───────────────────────────────────────────────────────
+
+  log-agent:
+    build:
+      context: .
+      dockerfile: log_agent/Dockerfile
+    networks: [triage-net]
+    ports: ["8001:8001"]
+    environment:
+      POSTGRES_DSN:    postgresql://agent:agent_pass@postgres:5432/triage_db
+      REDIS_URL:       redis://redis:6379
+      LOG_AGENT_PORT:  "8001"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    restart: on-failure
+
+  metrics-agent:
+    build:
+      context: .
+      dockerfile: metrics_agent/Dockerfile
+    networks: [triage-net]
+    ports: ["8002:8002"]
+    environment:
+      POSTGRES_DSN:        postgresql://agent:agent_pass@postgres:5432/triage_db
+      REDIS_URL:           redis://redis:6379
+      METRICS_AGENT_PORT:  "8002"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    restart: on-failure
+
+  deployment-agent:
+    build:
+      context: .
+      dockerfile: deployment_agent/Dockerfile
+    networks: [triage-net]
+    ports: ["8003:8003"]
+    environment:
+      POSTGRES_DSN:           postgresql://agent:agent_pass@postgres:5432/triage_db
+      REDIS_URL:              redis://redis:6379
+      DEPLOYMENT_AGENT_PORT:  "8003"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    restart: on-failure
+
+  diagnosis-agent:
+    build:
+      context: .
+      dockerfile: diagnosis_agent/Dockerfile
+    networks: [triage-net]
+    ports: ["8004:8004"]
+    environment:
+      POSTGRES_DSN:         postgresql://agent:agent_pass@postgres:5432/triage_db
+      REDIS_URL:            redis://redis:6379
+      OLLAMA_BASE_URL:      http://host.docker.internal:11434
+      OLLAMA_MODEL:         qwen2.5:3b
+      DIAGNOSIS_AGENT_PORT: "8004"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: on-failure
+
+  # ── Orchestrator ────────────────────────────────────────────────────────────
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: orchestrator/Dockerfile
+    networks: [triage-net]
+    ports: ["8000:8000"]
+    environment:
+      POSTGRES_DSN:         postgresql://agent:agent_pass@postgres:5432/triage_db
+      REDIS_URL:            redis://redis:6379
+      OLLAMA_BASE_URL:      http://host.docker.internal:11434
+      OLLAMA_MODEL:         qwen2.5:3b
+      LOG_AGENT_URL:        http://log-agent:8001
+      METRICS_AGENT_URL:    http://metrics-agent:8002
+      DEPLOYMENT_AGENT_URL: http://deployment-agent:8003
+      DIAGNOSIS_AGENT_URL:  http://diagnosis-agent:8004
+      ORCHESTRATOR_PORT:    "8000"
+    depends_on:
+      postgres:         { condition: service_healthy }
+      redis:            { condition: service_healthy }
+      log-agent:        { condition: service_started }
+      metrics-agent:    { condition: service_started }
+      deployment-agent: { condition: service_started }
+      diagnosis-agent:  { condition: service_started }
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: on-failure
+
+  # ── Observability ───────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    networks: [triage-net]
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    depends_on:
+      - log-agent
+      - metrics-agent
+      - deployment-agent
+      - diagnosis-agent
+      - orchestrator
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    networks: [triage-net]
+    ports: ["3000:3000"]
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP:     "false"
+      GF_AUTH_ANONYMOUS_ENABLED:  "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    depends_on:
+      - prometheus

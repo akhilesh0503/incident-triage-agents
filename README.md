@@ -1,6 +1,6 @@
 # Autonomous Incident Triage System
 
-**5/5 scenarios · 101 tests passing in 3.2s · HIGH confidence diagnosis on all runs · parallel specialist agents in <1s · 0 routing mismatches across 5 alert types**
+**15 scenarios (14 injected + 1 failure test) · 101 tests passing in 3.2s · HIGH confidence on all runs · parallel specialist agents in <1s · 0 routing mismatches · graceful degradation on empty DB verified**
 
 A production-grade multi-agent system that classifies production alerts with an LLM, routes to specialist agents in parallel via the A2A protocol, and synthesizes a grounded root cause diagnosis with a 4-step remediation plan — streamed live to the UI.
 
@@ -80,7 +80,7 @@ Each alert type routes to a precise subset of agents — no agent runs unnecessa
 - [x] **Phase 3** — DiagnosisAgent: Ollama client, grounded prompt builder, response parser
 - [x] **Phase 4** — OrchestratorAgent: LLM classifier, LangGraph StateGraph, parallel fan-out, SSE streaming, dark-theme UI
 - [x] **Phase 5** — Docker Compose (9 services), Dockerfiles, Prometheus scrape config, Grafana dashboard
-- [x] **Phase 6** — 100-test pytest suite + run_traffic.py end-to-end integration harness
+- [x] **Phase 6** — 101-test pytest suite + run_traffic.py (15 scenarios including failure handling test)
 
 ---
 
@@ -138,15 +138,25 @@ pytest ../tests/ -v
 
 ## Incident Scenarios
 
-Each scenario writes anomaly data to PostgreSQL, then a real triage run fires against it.
+14 injectable scenarios + 1 failure test. Each inject writes realistic anomaly data to PostgreSQL.
 
-| Scenario | What's Injected | Agents Expected |
-|---|---|---|
-| `memory_leak` | 30 OOM log entries + memory metrics rising 60% → 94% | Log + Metrics |
-| `failed_deployment` | 1 failed deploy record + 25 error logs | Log + Deployment |
-| `high_latency` | 20 timeout logs + latency rising 400ms → 1800ms | Log + Metrics |
-| `database_overload` | 25 connection pool exhaustion logs + db_connections 70% → 96% | Log + Metrics + Deployment |
-| `cpu_spike` | 15 timeout logs + CPU rising 60% → 95% | Metrics + Log |
+| Scenario | Service | What's Injected | Primary Signal |
+|---|---|---|---|
+| `memory_leak` | user-service | 30 OOM logs + memory 60% → 94% | memory_exhaustion |
+| `failed_deployment` | payment-service | 1 failed deploy + 25 error logs | fatal_error + deployment |
+| `high_latency` | api-gateway | 20 timeout logs + latency 400ms → 1800ms | timeout |
+| `database_overload` | db-proxy | 25 pool exhaustion logs + db_connections 70% → 96% | connection_pool_exhausted |
+| `cpu_spike` | auth-service | 15 timeout logs + CPU 60% → 95% | cpu_percent |
+| `disk_full` | order-service | 22 disk-full logs + error_rate spike | disk_full |
+| `cert_expiry` | api-gateway | 20 cert + http_5xx logs + error_rate spike | cert_error |
+| `service_crash` | checkout-service | 1 failed deploy + 23 SIGSEGV/fatal logs | fatal_error |
+| `db_deadlock` | transaction-service | 28 deadlock logs + db_connections 65% → 89% | deadlock |
+| `rollback_incident` | inventory-service | 1 rolled_back deploy + 20 http_5xx logs | deployment |
+| `traffic_spike` | recommendation-service | CPU 55% → 95% + latency 180ms → 1980ms simultaneously | cpu + latency |
+| `connection_storm` | notification-service | 24 connection_failure logs + error_rate spike | connection_failure |
+| `gradual_degradation` | cache-service | memory 52% → 78% over 6h (warning, not critical) | memory_percent |
+| `null_pointer_storm` | product-service | 22 NPE logs + error_rate + latency spike | null_reference |
+| `cold_service` *(failure test)* | reporting-service | **no inject** — empty DB | graceful degradation |
 
 ---
 
@@ -207,6 +217,52 @@ open http://localhost:3000   # admin / admin
 
 # Run all 5 scenarios and verify routing
 python run_traffic.py
+```
+
+---
+
+## Failure Handling
+
+Each failure mode is isolated — a broken agent does not take down the triage.
+
+### Specialist agent unreachable (e.g. DeploymentAgent is down)
+
+`_call_specialist` wraps every inter-agent call in a try/except. If the agent is unreachable, times out, or returns a non-2xx response:
+
+```python
+except Exception as exc:
+    await _publish(triage_id, {"stage": "agent_error", "agent": name, "message": f"{name}: failed — {exc}"})
+    return name, {"error": str(exc), "anomalous": False}
+```
+
+`asyncio.gather(*coros)` collects all results — agents run in parallel and each failure is caught independently. The remaining agents complete normally. DiagnosisAgent receives `{"error": "...", "anomalous": False}` for the failed agent and synthesizes a diagnosis from whatever partial evidence is available.
+
+Timeouts: 45s per specialist, 120s for diagnosis.
+
+### LLM classifier fails
+
+If Ollama is unreachable or the model times out, `classify_alert` returns `"unknown"`. `ALERT_ROUTING["unknown"]` runs all three specialist agents — maximum evidence collection as the safe fallback.
+
+### All agents return empty findings (no data in DB)
+
+Verified by the `cold_service` test in `run_traffic.py`. When a service has no logs, metrics, or deployment records:
+- All three agents return empty-but-valid responses
+- DiagnosisAgent still completes and records an incident
+- Confidence is LOW or MEDIUM — correctly reflects the evidence quality
+- Pipeline status: `completed`, not `failed`
+
+### LangGraph `mark_failed` node
+
+If the `classify_alert` node sets `error` in state (unrecoverable classification failure), the conditional edge routes to `mark_failed` instead of `run_specialists`. An SSE `failed` event is published and the pipeline exits cleanly.
+
+```
+classify_alert
+     │
+route_after_classify ── error set ──► mark_failed ──► END
+     │
+  no error
+     ▼
+run_specialists ──► run_diagnosis ──► END
 ```
 
 ---

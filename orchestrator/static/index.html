@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Incident Triage System</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d1117;
+      --panel:   #161b22;
+      --border:  #30363d;
+      --text:    #e6edf3;
+      --muted:   #8b949e;
+      --blue:    #58a6ff;
+      --green:   #3fb950;
+      --yellow:  #d29922;
+      --red:     #f85149;
+      --purple:  #bc8cff;
+      --orange:  #ffa657;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", monospace;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 18px; font-weight: 600; }
+    header .badge {
+      background: #1f6feb33;
+      border: 1px solid #1f6feb;
+      color: var(--blue);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr 380px;
+      gap: 0;
+      height: calc(100vh - 57px);
+    }
+
+    .panel {
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .panel:last-child { border-right: none; }
+
+    .panel-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    /* ── Scenario buttons ── */
+    .scenario-btn {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s;
+      color: var(--text);
+    }
+    .scenario-btn:hover { border-color: var(--blue); background: #1f6feb1a; }
+    .scenario-btn.active { border-color: var(--blue); background: #1f6feb2a; }
+    .scenario-btn.running { border-color: var(--yellow); background: #d299221a; }
+    .scenario-btn .icon { font-size: 22px; margin-bottom: 4px; display: block; }
+    .scenario-btn .label { font-weight: 600; font-size: 13px; }
+    .scenario-btn .desc { color: var(--muted); font-size: 11px; margin-top: 3px; line-height: 1.4; }
+
+    /* ── Activity log ── */
+    #log-container {
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      height: calc(100% - 40px);
+      overflow-y: auto;
+      padding: 12px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid #1c2128;
+      line-height: 1.5;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .log-entry:last-child { border-bottom: none; }
+    .log-time { color: var(--muted); margin-right: 8px; }
+    .log-stage-classifying { color: var(--purple); }
+    .log-stage-classified  { color: var(--blue); }
+    .log-stage-investigating { color: var(--yellow); }
+    .log-stage-agent_started { color: var(--muted); }
+    .log-stage-agent_done    { color: var(--green); }
+    .log-stage-agent_error   { color: var(--red); }
+    .log-stage-diagnosing    { color: var(--orange); }
+    .log-stage-complete      { color: var(--green); font-weight: 600; }
+    .log-stage-failed        { color: var(--red); }
+    .log-placeholder { color: var(--muted); font-style: italic; padding: 20px 0; text-align: center; }
+
+    /* ── Agent status pills ── */
+    #agent-status {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .agent-pill {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+      transition: all 0.2s;
+    }
+    .agent-pill.running { border-color: var(--yellow); color: var(--yellow); background: #d299221a; }
+    .agent-pill.done    { border-color: var(--green);  color: var(--green);  background: #3fb9501a; }
+    .agent-pill.error   { border-color: var(--red);    color: var(--red);    background: #f851491a; }
+
+    /* ── Diagnosis panel ── */
+    #diagnosis-panel { padding: 16px; overflow-y: auto; }
+    #diagnosis-panel .empty-state {
+      color: var(--muted);
+      text-align: center;
+      padding: 40px 0;
+      font-style: italic;
+    }
+
+    .diag-section { margin-bottom: 16px; }
+    .diag-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .service-tag {
+      display: inline-block;
+      background: #1f6feb33;
+      border: 1px solid var(--blue);
+      color: var(--blue);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+
+    .alert-type-tag {
+      display: inline-block;
+      background: #bc8cff22;
+      border: 1px solid var(--purple);
+      color: var(--purple);
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+
+    .confidence-badge {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .confidence-HIGH   { background: #3fb9501a; border: 1px solid var(--green);  color: var(--green);  }
+    .confidence-MEDIUM { background: #d299221a; border: 1px solid var(--yellow); color: var(--yellow); }
+    .confidence-LOW    { background: #f851491a; border: 1px solid var(--red);    color: var(--red);    }
+
+    .root-cause-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--blue);
+      border-radius: 4px;
+      padding: 10px 12px;
+      line-height: 1.6;
+      font-size: 13px;
+    }
+
+    .remediation-list { list-style: none; }
+    .remediation-list li {
+      display: flex;
+      gap: 10px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .remediation-list li:last-child { border-bottom: none; }
+    .remediation-list .step-num {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #1f6feb33;
+      border: 1px solid var(--blue);
+      color: var(--blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 1px;
+    }
+
+    .evidence-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .evidence-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      text-align: center;
+    }
+    .evidence-card .ev-val { font-size: 18px; font-weight: 700; color: var(--text); }
+    .evidence-card .ev-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .evidence-card.critical .ev-val { color: var(--red); }
+    .evidence-card.warning  .ev-val { color: var(--yellow); }
+
+    .spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:22px">🔍</span>
+  <h1>Incident Triage System</h1>
+  <span class="badge">A2A · LangGraph · Ollama</span>
+  <span style="margin-left:auto; color:var(--muted); font-size:12px" id="status-line">Ready</span>
+</header>
+
+<div class="layout">
+
+  <!-- ── Left: Scenarios ── -->
+  <div class="panel">
+    <div class="panel-title">Incident Scenarios</div>
+    <div id="scenario-buttons"></div>
+  </div>
+
+  <!-- ── Center: Activity ── -->
+  <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+    <div>
+      <div class="panel-title">Pipeline Activity</div>
+      <div id="agent-status">
+        <span class="agent-pill" id="pill-LogAgent">LogAgent</span>
+        <span class="agent-pill" id="pill-MetricsAgent">MetricsAgent</span>
+        <span class="agent-pill" id="pill-DeploymentAgent">DeploymentAgent</span>
+        <span class="agent-pill" id="pill-DiagnosisAgent">DiagnosisAgent</span>
+      </div>
+    </div>
+    <div id="log-container">
+      <div class="log-placeholder">Select a scenario to start triage →</div>
+    </div>
+  </div>
+
+  <!-- ── Right: Diagnosis ── -->
+  <div id="diagnosis-panel">
+    <div class="panel-title">Diagnosis Result</div>
+    <div id="diagnosis-content" class="empty-state">
+      Awaiting triage completion...
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SCENARIOS = [
+  { name: "memory_leak",       icon: "🧠", label: "Memory Leak",     desc: "user-service OOM killer triggered" },
+  { name: "failed_deployment", icon: "🚨", label: "Failed Deploy",   desc: "payment-service 500s after v3.1.0" },
+  { name: "high_latency",      icon: "⏱️", label: "High Latency",    desc: "api-gateway p95 spike to 1.8s" },
+  { name: "database_overload", icon: "🗄️", label: "DB Overload",     desc: "db-proxy connection pool at 95%" },
+  { name: "cpu_spike",         icon: "🔥", label: "CPU Spike",       desc: "auth-service at 93% CPU" },
+];
+
+let activeScenario = null;
+let activeEventSource = null;
+
+// ── Render scenario buttons ──
+const btnContainer = document.getElementById("scenario-buttons");
+SCENARIOS.forEach(s => {
+  const btn = document.createElement("button");
+  btn.className = "scenario-btn";
+  btn.id = `btn-${s.name}`;
+  btn.innerHTML = `<span class="icon">${s.icon}</span><span class="label">${s.label}</span><span class="desc">${s.desc}</span>`;
+  btn.addEventListener("click", () => startTriage(s.name));
+  btnContainer.appendChild(btn);
+});
+
+function setStatus(msg) {
+  document.getElementById("status-line").textContent = msg;
+}
+
+function resetAgentPills() {
+  ["LogAgent","MetricsAgent","DeploymentAgent","DiagnosisAgent"].forEach(a => {
+    const p = document.getElementById(`pill-${a}`);
+    p.className = "agent-pill";
+  });
+}
+
+function setAgentPill(agentName, state) {
+  const p = document.getElementById(`pill-${agentName}`);
+  if (p) p.className = `agent-pill ${state}`;
+}
+
+function appendLog(event) {
+  const container = document.getElementById("log-container");
+  // Remove placeholder
+  const placeholder = container.querySelector(".log-placeholder");
+  if (placeholder) placeholder.remove();
+
+  const entry = document.createElement("div");
+  entry.className = `log-entry log-stage-${event.stage || "info"}`;
+
+  const now = new Date().toTimeString().slice(0,8);
+  const spinner = ["classifying","investigating","diagnosing","agent_started"].includes(event.stage)
+    ? `<span class="spinner"></span>` : "";
+
+  entry.innerHTML = `<span class="log-time">${now}</span>${spinner}${escapeHtml(event.message || JSON.stringify(event))}`;
+  container.appendChild(entry);
+  container.scrollTop = container.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function renderDiagnosis(diagnosis, alertType) {
+  const panel = document.getElementById("diagnosis-content");
+  const ev = diagnosis.evidence_summary || {};
+  const steps = diagnosis.remediation_steps || [];
+  const conf = diagnosis.confidence || "MEDIUM";
+
+  const evCards = [
+    { val: ev.log_error_count ?? "—",              label: "Log Errors",      cls: ev.log_error_count > 10 ? "critical" : "" },
+    { val: ev.metrics_worst_severity ?? "ok",      label: "Metrics",         cls: ev.metrics_worst_severity === "critical" ? "critical" : ev.metrics_worst_severity === "warning" ? "warning" : "" },
+    { val: `${ev.deployment_correlation_score ?? 0}%`, label: "Deploy Corr.", cls: ev.deployment_correlation_score > 70 ? "warning" : "" },
+  ];
+
+  panel.innerHTML = `
+    <div class="diag-section" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="service-tag">${escapeHtml(diagnosis.service || "")}</span>
+      ${alertType ? `<span class="alert-type-tag">${escapeHtml(alertType)}</span>` : ""}
+      <span class="confidence-badge confidence-${conf}">${conf} confidence</span>
+    </div>
+
+    <div class="diag-section">
+      <div class="diag-label">Evidence Summary</div>
+      <div class="evidence-grid">
+        ${evCards.map(c => `<div class="evidence-card ${c.cls}"><div class="ev-val">${c.val}</div><div class="ev-label">${c.label}</div></div>`).join("")}
+      </div>
+    </div>
+
+    <div class="diag-section">
+      <div class="diag-label">Root Cause</div>
+      <div class="root-cause-box">${escapeHtml(diagnosis.root_cause || "No root cause identified")}</div>
+    </div>
+
+    <div class="diag-section">
+      <div class="diag-label">Remediation Steps</div>
+      <ul class="remediation-list">
+        ${steps.map((s, i) => `<li><span class="step-num">${i+1}</span><span>${escapeHtml(s)}</span></li>`).join("") || "<li><span style='color:var(--muted)'>No steps provided</span></li>"}
+      </ul>
+    </div>
+
+    ${diagnosis.incident_id ? `<div style="color:var(--muted);font-size:11px;margin-top:8px">Incident #${diagnosis.incident_id} recorded in database</div>` : ""}
+  `;
+}
+
+async function startTriage(scenarioName) {
+  if (activeEventSource) {
+    activeEventSource.close();
+    activeEventSource = null;
+  }
+
+  // Reset UI
+  SCENARIOS.forEach(s => document.getElementById(`btn-${s.name}`).classList.remove("active","running"));
+  const btn = document.getElementById(`btn-${scenarioName}`);
+  btn.classList.add("running");
+  activeScenario = scenarioName;
+
+  document.getElementById("log-container").innerHTML = "";
+  document.getElementById("diagnosis-content").innerHTML = `<div class="empty-state">Triage in progress...</div>`;
+  resetAgentPills();
+  setStatus("Injecting anomaly data...");
+
+  let alertDescription, service, alertType;
+
+  try {
+    // 1. Inject anomaly
+    const simResp = await fetch(`/simulate/${scenarioName}`, { method: "POST" });
+    if (!simResp.ok) throw new Error("Simulation failed: " + await simResp.text());
+    const simData = await simResp.json();
+    alertDescription = simData.alert_description;
+    service = simData.service;
+    appendLog({ stage: "info", message: `Anomaly injected for ${simData.scenario} on ${service}` });
+
+    setStatus("Starting triage pipeline...");
+
+    // 2. Start triage
+    const triageResp = await fetch("/triage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ alert_description: alertDescription, service }),
+    });
+    if (!triageResp.ok) throw new Error("Triage start failed: " + await triageResp.text());
+    const triageData = await triageResp.json();
+    const triageId = triageData.triage_id;
+
+    appendLog({ stage: "info", message: `Triage ${triageId.slice(0,8)}... started` });
+    setStatus("Pipeline running...");
+
+    // 3. Subscribe to SSE
+    const es = new EventSource(`/triage/${triageId}/events`);
+    activeEventSource = es;
+
+    es.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data);
+        appendLog(event);
+
+        // Update agent pills
+        if (event.stage === "classified") {
+          alertType = event.alert_type;
+          setStatus(`Alert type: ${event.alert_type}`);
+        }
+        if (event.stage === "agent_started") {
+          setAgentPill(event.agent, "running");
+          if (event.agent === "DiagnosisAgent") setAgentPill("DiagnosisAgent", "running");
+        }
+        if (event.stage === "agent_done")  setAgentPill(event.agent, "done");
+        if (event.stage === "agent_error") setAgentPill(event.agent, "error");
+        if (event.stage === "diagnosing")  setAgentPill("DiagnosisAgent", "running");
+
+        if (event.stage === "complete") {
+          setAgentPill("DiagnosisAgent", "done");
+          renderDiagnosis(event.diagnosis, alertType);
+          btn.classList.remove("running");
+          btn.classList.add("active");
+          setStatus("Triage complete");
+          es.close();
+        }
+        if (event.stage === "failed") {
+          setStatus("Triage failed — " + (event.message || ""));
+          btn.classList.remove("running");
+          es.close();
+        }
+      } catch (err) {
+        console.error("SSE parse error:", err, e.data);
+      }
+    };
+
+    es.onerror = () => {
+      setStatus("SSE connection lost");
+    };
+
+  } catch (err) {
+    appendLog({ stage: "failed", message: "Error: " + err.message });
+    setStatus("Error: " + err.message);
+    btn.classList.remove("running");
+  }
+}
+</script>
+</body>
+</html>

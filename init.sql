@@ -42,24 +42,23 @@ CREATE TABLE IF NOT EXISTS metrics_snapshots (
 
 -- Incident records (written by DiagnosisAgent)
 CREATE TABLE IF NOT EXISTS incidents (
-    id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    task_id         VARCHAR(64)  NOT NULL UNIQUE,
-    alert_type      VARCHAR(60)  NOT NULL,
-    affected_service VARCHAR(60),
-    severity        VARCHAR(20)  NOT NULL DEFAULT 'medium',
-    status          VARCHAR(20)  NOT NULL DEFAULT 'investigating',
-    root_cause      TEXT,
-    remediation     TEXT,
-    agents_consulted JSONB,
-    fired_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    resolved_at     TIMESTAMPTZ
+    id                SERIAL       PRIMARY KEY,
+    service           VARCHAR(60)  NOT NULL,
+    alert_description TEXT         NOT NULL,
+    root_cause        TEXT,
+    confidence        VARCHAR(10),             -- HIGH | MEDIUM | LOW
+    remediation       JSONB,                   -- ordered list of remediation step strings
+    agents_consulted  JSONB,                   -- list of agent names that contributed evidence
+    status            VARCHAR(20)  NOT NULL DEFAULT 'open',
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    resolved_at       TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_logs_service_time   ON logs(service, logged_at DESC);
 CREATE INDEX IF NOT EXISTS idx_logs_level          ON logs(level);
 CREATE INDEX IF NOT EXISTS idx_metrics_service     ON metrics_snapshots(service, metric_name, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_deployments_service ON deployments(service, deployed_at DESC);
-CREATE INDEX IF NOT EXISTS idx_incidents_fired     ON incidents(fired_at DESC);
+CREATE INDEX IF NOT EXISTS idx_incidents_created   ON incidents(created_at DESC);
 
 -- ── Seed data ────────────────────────────────────────────────────────────────
 
